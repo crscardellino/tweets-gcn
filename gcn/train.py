@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import json
+import mlflow
 import numpy as np
+import os
 import tensorflow as tf
 
 from tensorflow.keras import layers
@@ -53,12 +56,11 @@ def build_model(input_dim,
                 output_dim,
                 filter_sizes,
                 adjacency_matrix,
-                sparse_input=True,
-                dropout=None,
-                activation="relu",
-                use_bias=False,
-                kernel_regularizer=None,
-                kernel_initializer="glorot_uniform"):
+                sparse_input,
+                dropout,
+                activation,
+                use_bias,
+                reg_parameter):
     model_input = tf.keras.Input(
         shape=(input_dim),
         sparse=sparse_input
@@ -84,8 +86,7 @@ def build_model(input_dim,
             input_shape=(input_dim,) if sparse_input and lidx == 0 else None,
             activation=activation if lidx <= len(filter_sizes) else None,
             use_bias=use_bias,
-            kernel_initializer=kernel_initializer,
-            kernel_regularizer=kernel_regularizer
+            kernel_regularizer=tf.keras.regularizers.l2(reg_parameter)
         )(layer)
 
     model = tf.keras.Model(inputs=[model_input], outputs=[layer])
@@ -94,53 +95,74 @@ def build_model(input_dim,
 
 
 def main(args):
-    np.random.seed(args.random_seed)
-    tf.random.set_seed(args.random_seed)
+    with mlflow.start_run():
+        np.random.seed(args.random_seed)
+        tf.random.set_seed(args.random_seed)
 
-    # Load data
-    adj, features, y_train, y_validation, y_test, train_mask, validation_mask, test_mask = load_data(
-        args.dataset_path,
-        args.graph_path,
-        args.weighted_edges
-    )
+        with open(args.configuration) as fh:
+            config = json.load(fh)
 
-    model = build_model(
-        input_dim=features.shape[1],
-        output_dim=y_train.shape[1],
-        filter_sizes=args.filter_sizes,
-        adjacency_matrix=preprocess_adj(adj),
-        sparse_input=True,
-        dropout=args.dropout,
-        kernel_regularizer=tf.keras.regularizers.l2(1e-3)
-    )
+        for param, value in config.items():
+            mlflow.log_param(param, value)
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
-    loss = masked_softmax_cross_entropy
-    metrics = [masked_accuracy, masked_f1_score]
-    train_step = train_function()
-    validation_step = evaluation_function()
+        dataset_path = os.path.join(args.input, "semeval.abortion.data.csv")
+        graph_path = os.path.join(
+            args.input,
+            "semeval.abortion.graph.{}.csv".format(config.get("edge_type", "hashtags"))
+        )
 
-    progress_bar = trange(args.epochs)
-    for _ in progress_bar:
-        train_results = train_step(features, y_train, model, train_mask,
-                                   loss, optimizer, metrics)
-        validation_results = validation_step(features, y_validation, model,
-                                             validation_mask, loss, metrics)
+        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(
+            dataset_path,
+            graph_path,
+            config.get("weighted_edges", False)
+        )
 
-        tres = "loss: {:.3f} - acc: {:.3f} - f1: {:.3f}".format(*train_results)
-        vres = "val_loss: {:.3f} - val_acc: {:.3f} - val_f1: {:.3f}".format(*validation_results)
-        progress_bar.set_description("{} | {}".format(tres, vres))
+        model = build_model(
+            input_dim=features.shape[1],
+            output_dim=y_train.shape[1],
+            filter_sizes=config.get("filter_sizes", [16]),
+            adjacency_matrix=preprocess_adj(adj),
+            sparse_input=True,
+            dropout=config.get("dropout", 0),
+            activation=config.get("activation", "relu"),
+            use_bias=config.get("use_bias", False),
+            reg_parameter=config.get("reg_parameter", 0)
+        )
+
+        optimizer = tf.keras.optimizers.Adam(learning_rate=config.get("learning_rate", 0.1))
+        loss = masked_softmax_cross_entropy
+        metrics = [masked_f1_score]
+        train_step = train_function()
+        validation_step = evaluation_function()
+
+        progress_bar = trange(config.get("epochs"))
+        for epoch in progress_bar:
+            train_results = train_step(features, y_train, model, train_mask,
+                                       loss, optimizer, metrics)
+            validation_results = validation_step(features, y_val, model,
+                                                 val_mask, loss, metrics)
+
+            tres = "loss: {:.3f} - f1: {:.3f}".format(*train_results)
+            vres = "val_loss: {:.3f} - val_f1: {:.3f}".format(*validation_results)
+            progress_bar.set_description("{} | {}".format(tres, vres))
+
+            epoch_results = {
+                "train_loss": train_results[0].numpy(),
+                "train_f1": train_results[1].numpy(),
+                "validation_loss": validation_results[0].numpy(),
+                "validation_f1": validation_results[1].numpy()
+            }
+
+            mlflow.log_metrics(epoch_results, step=epoch)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("dataset_path")
-    parser.add_argument("graph_path")
-    parser.add_argument("--weighted-edges", action="store_true")
-    parser.add_argument("--filter-sizes", nargs="+", type=int, default=[32])
+    parser.add_argument("input",
+                        help="Path to the directory that holds the dataset and graph files")
+    parser.add_argument("configuration",
+                        help="Path to the json with the configuration for the experiment.")
     parser.add_argument("--random-seed", type=int, default=42)
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--dropout", type=float, default=0.5)
 
     args = parser.parse_args()
 

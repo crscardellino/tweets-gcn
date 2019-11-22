@@ -27,7 +27,7 @@ if __name__ == "__main__":
         "edge_type": ["hashtags", "mentions", "toptfidf"] +
                      ["{}-grams".format(n) for n in range(2, 6)],
         "epochs": [50, 100, 250, 500],
-        "filter_sizes": [[16], [32], [64], [16, 16], [32, 32], [64, 64]],
+        "filter_sizes": [[16], [32], [64], [128]],
         "learning_rate": [0.1, 0.01, 0.001, 0.0001],
         "reg_parameter": [0.1, 0.01, 0.001, 0.0001, 0],
         "use_bias": [True, False],

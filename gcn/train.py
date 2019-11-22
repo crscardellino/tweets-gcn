@@ -57,12 +57,13 @@ def build_model(input_dim,
                 filter_sizes,
                 adjacency_matrix,
                 sparse_input,
+                sparse_nnz_values,
                 dropout,
                 activation,
                 use_bias,
                 reg_parameter):
     model_input = tf.keras.Input(
-        shape=(input_dim),
+        shape=(input_dim,),
         sparse=sparse_input
     )
 
@@ -73,7 +74,7 @@ def build_model(input_dim,
             if sparse_input and lidx == 0:
                 layer = SparseDropout(
                     rate=dropout,
-                    noise_shape=(input_dim,)
+                    noise_shape=(sparse_nnz_values,)
                 )(layer)
             else:
                 layer = layers.Dropout(
@@ -123,6 +124,7 @@ def main(args):
             filter_sizes=config.get("filter_sizes", [16]),
             adjacency_matrix=preprocess_adj(adj),
             sparse_input=True,
+            sparse_nnz_values=features.nnz,
             dropout=config.get("dropout", 0),
             activation=config.get("activation", "relu"),
             use_bias=config.get("use_bias", False),
@@ -131,7 +133,7 @@ def main(args):
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=config.get("learning_rate", 0.1))
         loss = masked_softmax_cross_entropy
-        metrics = [masked_f1_score]
+        metrics = [masked_accuracy, masked_f1_score]
         train_step = train_function()
         validation_step = evaluation_function()
 
@@ -142,18 +144,30 @@ def main(args):
             validation_results = validation_step(features, y_val, model,
                                                  val_mask, loss, metrics)
 
-            tres = "loss: {:.3f} - f1: {:.3f}".format(*train_results)
-            vres = "val_loss: {:.3f} - val_f1: {:.3f}".format(*validation_results)
+            tres = "loss: {:.3f} - acc: {:.3f} - f1: {:.3f}".format(*train_results)
+            vres = "val_loss: {:.3f} - val_acc: {:.3f} - val_f1: {:.3f}".format(*validation_results)
             progress_bar.set_description("{} | {}".format(tres, vres))
 
             epoch_results = {
                 "train_loss": train_results[0].numpy(),
-                "train_f1": train_results[1].numpy(),
+                "train_accuracy": train_results[1].numpy(),
+                "train_f1": train_results[2].numpy(),
                 "validation_loss": validation_results[0].numpy(),
-                "validation_f1": validation_results[1].numpy()
+                "validation_accuracy": train_results[1].numpy(),
+                "validation_f1": validation_results[2].numpy()
             }
 
             mlflow.log_metrics(epoch_results, step=epoch)
+
+        if args.run_test:
+            test_step = evaluation_function()
+            test_results = test_step(features, y_test, model, test_mask, loss, metrics)
+
+            mlflow.log_metrics({
+                "test_loss": test_results[0].numpy(),
+                "test_accuracy": test_results[1].numpy(),
+                "test_f1": test_results[2].numpy()
+            })
 
 
 if __name__ == "__main__":
@@ -162,6 +176,7 @@ if __name__ == "__main__":
                         help="Path to the directory that holds the dataset and graph files")
     parser.add_argument("configuration",
                         help="Path to the json with the configuration for the experiment.")
+    parser.add_argument("--run-test", action="store_true")
     parser.add_argument("--random-seed", type=int, default=42)
 
     args = parser.parse_args()

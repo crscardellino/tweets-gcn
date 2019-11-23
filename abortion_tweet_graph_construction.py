@@ -1,0 +1,275 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import argparse
+import pandas as pd
+import string
+import sys
+
+from gensim import corpora, models
+from joblib import Parallel, delayed
+from nltk import ngrams
+from nltk.corpus import stopwords as nltk_stopwords
+from nltk.tokenize import TweetTokenizer
+from operator import itemgetter
+
+
+def normalize_token(token, **kwargs):
+    if kwargs.get("remove_hashtags") and token.startswith("#"):
+        return ""
+
+    if kwargs.get("remove_mentions") and token.startswith("@"):
+        return ""
+
+    if kwargs.get("normalize_hashtags") and token.startswith("#"):
+        # TODO: Maybe a way to split hashtags?
+        token = token[1:]
+
+    if kwargs.get("normalize_mentions") and token.startswith("@"):
+        token = token[1:]
+
+    if kwargs.get("tweet_lowercase"):
+        token = token.lower()
+
+    return token
+
+
+def normalize_tweet(tweet, stopwords=set(), punctuation=set(), **kwargs):
+    tweet = [normalize_token(t, **kwargs).strip() for t in tweet
+             if t not in stopwords and t not in punctuation]
+
+    return [t for t in tweet if t != ""]
+
+
+def extract_hashtags(tokens, hashtag_ignore=set()):
+    return sorted(set([
+        t for t in tokens
+        if t.startswith("#") and
+        t.strip() != "#" and
+        t.lower()[1:] not in hashtag_ignore
+    ]))
+
+
+def extract_mentions(tokens, mentions_ignore=set()):
+    return sorted(set([
+        t for t in tokens
+        if t.startswith("@") and
+        t.strip() != "@" and
+        t.lower()[1:] not in mentions_ignore
+    ]))
+
+
+def extract_ngrams(tokens, n=3):
+    return sorted(set([
+        "_".join(ngram) for ngram in ngrams(tokens, n=n)
+    ]))
+
+
+def extract_toptfidf(tfidf_tweet, k=5):
+    return [
+        t[0] for t in sorted(tfidf_tweet, key=itemgetter(1), reverse=True)[:k]
+    ]
+
+
+def build_adjacency_matrix(graph_type, data):
+    adjacency = []
+    for idx, row_i in data.iterrows():
+        # Needed for NetworkX to keep track of all existing nodes
+        # (even isolated ones)
+        adjacency.append((row_i["ID"], row_i["ID"], 0))
+        # Only store a triangular matrix (the matrix is symmetric)
+        for _, row_j in data.loc[idx+1:].iterrows():
+            # TODO: Is this the best way to weight edges?
+            edge_weight = len(
+                set(row_i[graph_type]).intersection(row_j[graph_type])
+            )
+            if edge_weight > 0:
+                adjacency.append((row_i["ID"], row_j["ID"], edge_weight))
+    return graph_type, adjacency
+
+
+def main(args):
+    print("Loading data", file=sys.stderr)
+    dataset = pd.read_csv(args.dataset_input)
+
+    if args.supervised_only:
+        print("Filtering unsupervised", file=sys.stderr)
+        dataset = dataset[dataset["Stance"] != "UNK"]
+
+    print("Tokenizing tweets", file=sys.stderr)
+    tweet_tokenizer = TweetTokenizer(
+        reduce_len=args.reduce_tweet_word_len
+    )
+    dataset["TokenizedTweet"] = dataset["Tweet"].apply(
+        tweet_tokenizer.tokenize
+    )
+
+    print("Normalizing tweets", file=sys.stderr)
+    punctuation_symbols = set(string.punctuation) \
+        if args.remove_punctuation else set()
+    stopwords = set(nltk_stopwords.words("english")) \
+        if args.remove_stopwords else set()
+    dataset["NormalizedTweet"] = dataset["TokenizedTweet"].apply(
+        lambda t: normalize_tweet(
+            tweet=t,
+            stopwords=stopwords,
+            punctuation=punctuation_symbols,
+            remove_hashtags=args.remove_hashtags,
+            remove_mentions=args.remove_mentions,
+            normalize_hashtags=args.normalize_hashtags,
+            normalize_mentions=args.normalize_mentions,
+            tweet_lowercase=args.tweet_lowercase
+        )
+    )
+
+    print("Building vocabulary", file=sys.stderr)
+    tweets_vocab = corpora.Dictionary(dataset["NormalizedTweet"])
+    tweets_vocab.filter_extremes(
+        no_below=args.min_docs,
+        no_above=args.max_docs
+    )
+
+    print("Building bag-of-words features", file=sys.stderr)
+    bow_corpus = dataset["NormalizedTweet"].apply(
+        tweets_vocab.doc2bow
+    ).tolist()
+    corpora.MmCorpus.serialize(
+        "{}.bow.mm".format(args.output_basename),
+        bow_corpus
+    )
+
+    print("Building TF-IDF features", file=sys.stderr)
+    tfidf_model = models.TfidfModel(
+        bow_corpus,
+        dictionary=tweets_vocab
+    )
+    tfidf_corpus = tfidf_model[bow_corpus]
+    corpora.MmCorpus.serialize(
+        "{}.tfidf.mm".format(args.output_basename),
+        tfidf_corpus
+    )
+
+
+    print("Extracting graph information", file=sys.stderr)
+    graph_types = []
+
+    if args.graph_hashtags:
+        dataset["hashtags"] = dataset["TokenizedTweet"].apply(
+            lambda t: extract_hashtags(
+                t,
+                set(map(lambda t: t.lower(), args.ignore_hashtags))
+            )
+        )
+        graph_types.append("hashtags")
+
+    if args.graph_mentions:
+        dataset["mentions"] = dataset["TokenizedTweet"].apply(
+            lambda t: extract_mentions(
+                t,
+                set(map(lambda t: t.lower(), args.ignore_mentions))
+            )
+        )
+        graph_types.append("mentions")
+
+    for n in args.graph_ngrams:
+        dataset["{}-gram".format(n)] = dataset["TokenizedTweet"].apply(
+            lambda t: extract_ngrams(t, n)
+        )
+        graph_types.append("{}-gram".format(n))
+
+    for k in args.graph_tfidf:
+        dataset["top-{}-tfidf".format(k)] = dataset["ID"].apply(
+            lambda idx: extract_toptfidf(tfidf_corpus[idx], k)
+        )
+        graph_types.append("top-{}-tfidf".format(k))
+
+    print("Building graphs", file=sys.stderr)
+    adjacencies = dict(
+        Parallel(n_jobs=-1, verbose=10)(
+            delayed(build_adjacency_matrix)(
+                graph_type, dataset.loc[:, ["ID", graph_type]]
+            ) for graph_type in graph_types
+        )
+    )
+
+    print("Saving graphs", file=sys.stderr)
+    for graph_type, adjacency in adjacencies.items():
+        pd.DataFrame(
+            adjacency,
+            columns=["row", "col", "weight"]
+        ).to_csv(
+            "{}.{}.csv.gz".format(args.output_basename, graph_type)
+        )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dataset_input",
+                        help="Path to the dataset csv file.")
+    parser.add_argument("output_basename",
+                        help="Basename (path included) to store the outputs")
+    parser.add_argument("--graph-hashtags",
+                        action="store_true",
+                        help="Build graph of hashtags.")
+    parser.add_argument("--graph-mentions",
+                        action="store_true",
+                        help="Build graph of mentions.")
+    parser.add_argument("--graph-ngrams",
+                        default=[],
+                        help="Build graph of n-grams.",
+                        nargs="+",
+                        type=int)
+    parser.add_argument("--graph-tfidf",
+                        default=[],
+                        help="Build graph of top k tfidf tokens.",
+                        nargs="+",
+                        type=int)
+    parser.add_argument("--ignore-hashtags",
+                        default=[],
+                        help="List of hashtag to ignore when building graph.",
+                        nargs="+",
+                        type=str)
+    parser.add_argument("--ignore-mentions",
+                        default=[],
+                        help="List of mentions to ignore when building graph.",
+                        nargs="+",
+                        type=str)
+    parser.add_argument("--max-docs",
+                        default=1.0,
+                        help="Maximum fraction of documents for TF-IDF.",
+                        type=float)
+    parser.add_argument("--min-docs",
+                        default=2,
+                        help="Minimum document frequency for TF-IDF.",
+                        type=int)
+    parser.add_argument("--normalize-hashtags",
+                        action="store_true",
+                        help="Normalize hashtags in tweets.")
+    parser.add_argument("--normalize-mentions",
+                        action="store_true",
+                        help="Normalize mentions in tweets.")
+    parser.add_argument("--remove-hashtags",
+                        action="store_true",
+                        help="Remove hashtags from tweets.")
+    parser.add_argument("--remove-mentions",
+                        action="store_true",
+                        help="Remove mentions from tweets.")
+    parser.add_argument("--remove-punctuation",
+                        action="store_true",
+                        help="Remove punctuation symbols from tweets.")
+    parser.add_argument("--remove-stopwords",
+                        action="store_true",
+                        help="Remove stopwords from tweets.")
+    parser.add_argument("--reduce-tweet-word-len",
+                        action="store_true",
+                        help="Reduce the lenght of words in TweetTokenizer.")
+    parser.add_argument("--supervised-only",
+                        action="store_true",
+                        help="Build data only from labeled corpora.")
+    parser.add_argument("--tweet-lowercase",
+                        action="store_true",
+                        help="Lowercase the tweets.")
+
+    args = parser.parse_args()
+
+    main(args)

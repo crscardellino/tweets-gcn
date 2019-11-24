@@ -22,12 +22,13 @@ if __name__ == "__main__":
     os.makedirs(args.output, exist_ok=True)
 
     PARAMETERS_GRID = {
-        "activation": ["relu", "sigmoid", "tanh"],
         "dropout": [0, 0.1, 0.2, 0.3, 0.4, 0.5],
-        "edge_type": ["hashtags", "mentions", "toptfidf"] +
-                     ["{}-grams".format(n) for n in range(2, 6)],
-        "epochs": [50, 100, 250, 500],
-        "filter_sizes": [[16], [32], [64], [128]],
+        "feature_type": ["bow", "tfidf"],
+        "edge_type": ["hashtags", "mentions"] +
+                     ["{}-grams".format(n) for n in range(3, 7)] +
+                     ["top-{}-tfidf".format(k) for k in range(2, 6)],
+        "epochs": [100, 200, 300],
+        "filter_sizes": [[4], [8], [16], [32], [64], [128]],
         "learning_rate": [0.1, 0.01, 0.001, 0.0001],
         "reg_parameter": [0.1, 0.01, 0.001, 0.0001, 0],
         "use_bias": [True, False],
@@ -37,7 +38,10 @@ if __name__ == "__main__":
     experiment_base_name = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
 
     for i in range(args.experiments):
-        experiment_fname = os.path.join(args.output, "{}_{}.json".format(experiment_base_name, i))
+        experiment_fname = os.path.join(
+            args.output,
+            "{}_{}.json".format(experiment_base_name, i)
+        )
 
         experiment_config = {}
 

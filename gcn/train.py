@@ -106,16 +106,26 @@ def main(args):
         for param, value in config.items():
             mlflow.log_param(param, value)
 
-        dataset_path = os.path.join(args.input, "semeval.abortion.data.csv")
-        graph_path = os.path.join(
-            args.input,
-            "semeval.abortion.graph.{}.csv".format(config.get("edge_type", "hashtags"))
+        dataset_path = "{}.csv.gz".format(
+            args.input_basename
+            )
+        graph_path = "{}.{}.csv.gz".format(
+            args.input_basename,
+            config.get("edge_type", "hashtags")
         )
+        if config.get("feature_type"):
+            features_path = "{}.{}.mm".format(
+                args.input_basename,
+                config["feature_type"]
+            )
+        else:
+            features_path = None
 
         adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(
-            dataset_path,
-            graph_path,
-            config.get("weighted_edges", False)
+            dataset_path=dataset_path,
+            graph_path=graph_path,
+            features_path=features_path,
+            weighted_edges=config.get("weighted_edges", False)
         )
 
         model = build_model(
@@ -172,8 +182,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("input",
-                        help="Path to the directory that holds the dataset and graph files")
+    parser.add_argument("input_basename",
+                        help="Basename of the dataset files to generate the inputs.")
     parser.add_argument("configuration",
                         help="Path to the json with the configuration for the experiment.")
     parser.add_argument("--run-test", action="store_true")

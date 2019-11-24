@@ -3,7 +3,9 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
-import scipy.sparse as sps
+
+from scipy import sparse as sps
+from scipy.io import mmread
 
 
 def sample_mask(idx, l):
@@ -13,20 +15,23 @@ def sample_mask(idx, l):
     return np.array(mask, dtype=np.bool)
 
 
-def load_data(dataset_path, graph_path, weighted_edges=False, dtype=np.float32):
+def load_data(dataset_path, graph_path, features_path=None,
+              weighted_edges=False, dtype=np.float32):
     """
     Load dataset and graph.
 
     Parameters
     ----------
     dataset_path : str
-        Path to the csv file containing the whole data. It should have at least two columns:
-        "Stance" which will be the target column, and "Split" that tells which row belongs to which
-        dataset (train/test/validation). This is the file obtained in the notebook
-        `abortion_tweets_graph_construction.ipynb`.
+        Path to the csv file containing the data. It should have at least two
+        columns: "Stance" which will be the target column, and "Split" that
+        tells which row belongs to which dataset (train/test/validation/unlabel).
     graph_path : str
-        Path to a csv file containing the adjacency matrix (only half of it, since it is symmetric)
-        in coordinate format for the graph of the tweets.
+        Path to a csv file containing the adjacency matrix (only half of it,
+        since it is symmetric) in coordinate format for the graph of the tweets.
+    features_path : str
+        If given, path to the feature representation of the nodes as a sparse
+        Matrix Market matrix.
     weighted_edges : boolean
         Whether the graph has weighted edges or not.
     dtype : numpy type
@@ -36,8 +41,12 @@ def load_data(dataset_path, graph_path, weighted_edges=False, dtype=np.float32):
     dataset = pd.read_csv(dataset_path)
     graph_data = pd.read_csv(graph_path)
 
-    # This will eventually change to handle different feature engineering
-    features = sps.eye(dataset.shape[0]).astype(dtype)
+    if features_path:
+        features = mmread(features_path)
+    else:
+        features = sps.eye(dataset.shape[0])
+
+    features = preprocess_features(features).tocsr().astype(dtype)
 
     tweet_graph = nx.Graph()
     tweet_graph.add_weighted_edges_from(graph_data.values.tolist())
@@ -64,7 +73,17 @@ def load_data(dataset_path, graph_path, weighted_edges=False, dtype=np.float32):
     y_val[val_mask, :] = labels[val_mask, :]
     y_test[test_mask, :] = labels[test_mask, :]
 
-    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
+    return (adj, features, y_train, y_val, y_test,
+            train_mask, val_mask, test_mask)
+
+
+def preprocess_features(features):
+    """Row-normalize feature matrix"""
+    rowsum = np.array(features.sum(1))
+    r_inv = np.power(rowsum, -1).flatten()
+    r_inv[np.isinf(r_inv)] = 0.
+    r_mat_inv = sps.diags(r_inv)
+    return r_mat_inv.dot(features)
 
 
 def sparse_to_tuple(spmx):
@@ -90,5 +109,5 @@ def normalize_adj(adj):
 
 
 def preprocess_adj(adj):
-    """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""
+    """Preprocessing of adjacency matrix for simple GCN model"""
     return normalize_adj(adj + sps.eye(adj.shape[0])).astype(np.float32)

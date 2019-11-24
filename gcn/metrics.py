@@ -13,7 +13,7 @@ def masked_accuracy(true, pred, mask):
 
 
 @tf.function
-def masked_f1_score(true, pred, mask, macro_average=True):
+def masked_f1_score(true, pred, mask, macro_average=True, ignore_null_class=True):
     """F1-Score with masking"""
     pred = tf.cast(tf.equal(tf.reduce_max(pred, axis=1, keepdims=True), pred), tf.float32)
     mask = tf.cast(mask, dtype=tf.float32)
@@ -30,7 +30,10 @@ def masked_f1_score(true, pred, mask, macro_average=True):
     f1 = tf.where(tf.math.is_nan(f1), tf.zeros_like(f1), f1)  # Cast to 0 the NaN values
 
     if macro_average:
-        f1 = tf.reduce_mean(f1)
+        if ignore_null_class:
+            f1 = tf.reduce_mean(f1[:2])  # Only avg AGAINST and FAVOR
+        else:
+            f1 = tf.reduce_mean(f1)
 
     return f1
 

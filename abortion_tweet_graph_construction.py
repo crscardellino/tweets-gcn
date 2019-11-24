@@ -149,7 +149,6 @@ def main(args):
         tfidf_corpus
     )
 
-
     print("Extracting graph information", file=sys.stderr)
     graph_types = []
 
@@ -198,7 +197,8 @@ def main(args):
             adjacency,
             columns=["row", "col", "weight"]
         ).to_csv(
-            "{}.{}.csv.gz".format(args.output_basename, graph_type)
+            "{}.{}.csv.gz".format(args.output_basename, graph_type),
+            index=False
         )
 
 

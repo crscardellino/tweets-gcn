@@ -103,11 +103,20 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# Visual Studio Code
+.vscode/
+
+# Project's experiments
+experiment/
+experiments/
+exp/
+exps/
+experiment.sh
+experiments.sh
+exp.sh
+exps.sh
+mlruns/
+
 # Project
 data/
-.vscode/
-experiments/
-mlruns/
-experiment.sh
-exp.sh
 slurm.sh

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import json
 import mlflow
 import numpy as np
 import os
 import tensorflow as tf
+import yaml
 
 from tensorflow.keras import layers
 from tqdm import trange
@@ -96,19 +96,24 @@ def build_model(input_dim,
 
 
 def main(args):
+    with open(args.configuration) as fh:
+        config = yaml.load(fh, Loader=yaml.SafeLoader)
+
+    np.random.seed(config.get("random_seed", 42))
+    tf.random.set_seed(config.get("random_seed", 42))
+
+    experiment_basename = os.path.basename(args.configuration).split(".yml")[0]
+    experiment_date, experiment_hour, _ = experiment_basename.split("_")
+
+    mlflow.set_experiment("{}_{}".format(experiment_date, experiment_hour))
     with mlflow.start_run():
-        np.random.seed(args.random_seed)
-        tf.random.set_seed(args.random_seed)
-
-        with open(args.configuration) as fh:
-            config = json.load(fh)
-
+        mlflow.log_param("experiment_basename", experiment_basename)
         for param, value in config.items():
             mlflow.log_param(param, value)
 
         dataset_path = "{}.csv.gz".format(
             args.input_basename
-            )
+        )
         graph_path = "{}.{}.csv.gz".format(
             args.input_basename,
             config.get("edge_type", "hashtags")
@@ -187,7 +192,6 @@ if __name__ == "__main__":
     parser.add_argument("configuration",
                         help="Path to the json with the configuration for the experiment.")
     parser.add_argument("--run-test", action="store_true")
-    parser.add_argument("--random-seed", type=int, default=42)
 
     args = parser.parse_args()
 

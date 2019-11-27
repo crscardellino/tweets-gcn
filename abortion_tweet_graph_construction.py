@@ -5,6 +5,7 @@ import argparse
 import pandas as pd
 import string
 import sys
+import unidecode
 
 from gensim import corpora, models
 from joblib import Parallel, delayed
@@ -18,7 +19,13 @@ def normalize_token(token, **kwargs):
     if kwargs.get("remove_hashtags") and token.startswith("#"):
         return ""
 
+    if kwargs.get("remove_links") and token.startswith("http"):
+        return ""
+
     if kwargs.get("remove_mentions") and token.startswith("@"):
+        return ""
+
+    if kwargs.get("remove_numeric") and token.isnumeric():
         return ""
 
     if kwargs.get("normalize_hashtags") and token.startswith("#"):
@@ -31,7 +38,7 @@ def normalize_token(token, **kwargs):
     if kwargs.get("tweet_lowercase"):
         token = token.lower()
 
-    return token
+    return unidecode.unidecode(token)
 
 
 def normalize_tweet(tweet, stopwords=set(), punctuation=set(), **kwargs):
@@ -115,7 +122,9 @@ def main(args):
             stopwords=stopwords,
             punctuation=punctuation_symbols,
             remove_hashtags=args.remove_hashtags,
+            remove_links=args.remove_links,
             remove_mentions=args.remove_mentions,
+            remove_numeric=args.remove_numeric,
             normalize_hashtags=args.normalize_hashtags,
             normalize_mentions=args.normalize_mentions,
             tweet_lowercase=args.tweet_lowercase
@@ -251,9 +260,15 @@ if __name__ == "__main__":
     parser.add_argument("--remove-hashtags",
                         action="store_true",
                         help="Remove hashtags from tweets.")
+    parser.add_argument("--remove-links",
+                        action="store_true",
+                        help="Remove hyperlinks from tweets.")
     parser.add_argument("--remove-mentions",
                         action="store_true",
                         help="Remove mentions from tweets.")
+    parser.add_argument("--remove-numeric",
+                        action="store_true",
+                        help="Remove numeric tokens from tweets.")
     parser.add_argument("--remove-punctuation",
                         action="store_true",
                         help="Remove punctuation symbols from tweets.")

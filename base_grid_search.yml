@@ -3,7 +3,7 @@ dropout:
 edge_type:
 - hashtags
 - mentions
-- 5-grams
+- 5-gram
 epochs:
 - 200
 feature_type:

@@ -8,10 +8,10 @@ dropout:
 edge_type:
 - hashtags
 - mentions
-- 3-grams
-- 4-grams
-- 5-grams
-- 6-grams
+- 3-gram
+- 4-gram
+- 5-gram
+- 6-gram
 - top-2-tfidf
 - top-3-tfidf
 - top-4-tfidf

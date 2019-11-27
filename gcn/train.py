@@ -4,6 +4,7 @@ import argparse
 import mlflow
 import numpy as np
 import os
+import pandas as pd
 import tensorflow as tf
 import yaml
 
@@ -126,7 +127,7 @@ def main(args):
         else:
             features_path = None
 
-        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(
+        adj, features, labels, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(
             dataset_path=dataset_path,
             graph_path=graph_path,
             features_path=features_path,
@@ -183,6 +184,28 @@ def main(args):
                 "test_accuracy": test_results[1].numpy(),
                 "test_f1": test_results[2].numpy()
             })
+
+        final_predictions = pd.DataFrame(
+            tf.nn.softmax(model(features)).numpy(),
+            columns=labels
+        )
+        final_predictions["True"] = 0
+        final_predictions["Prediction"] = final_predictions[labels].values.argmax(axis=1)
+        final_predictions["Split"] = "Unlabel"
+        final_predictions.loc[train_mask, "True"] = y_train[train_mask].argmax(axis=1)
+        final_predictions.loc[train_mask, "Split"] = "Train"
+        final_predictions.loc[val_mask, "True"] = y_val[val_mask].argmax(axis=1)
+        final_predictions.loc[val_mask, "Split"] = "Validation"
+        final_predictions.loc[test_mask, "True"] = y_test[test_mask].argmax(axis=1)
+        final_predictions.loc[test_mask, "Split"] = "Test"
+
+        predictions_file = "/tmp/{}_final_predictions.csv".format(experiment_basename)
+        final_predictions.to_csv(
+            predictions_file,
+            index=False
+        )
+        mlflow.log_artifact(predictions_file)
+        os.unlink(predictions_file)
 
 
 if __name__ == "__main__":

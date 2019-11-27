@@ -56,24 +56,25 @@ def load_data(dataset_path, graph_path, features_path=None,
         weight="weight" if weighted_edges else None
     ).astype(dtype)
 
-    labels = pd.get_dummies(dataset["Stance"]).values.astype(dtype)
+    labels = sorted(dataset["Stance"].unique())
+    targets = pd.get_dummies(dataset["Stance"]).values.astype(dtype)
 
     idx_train = dataset.loc[dataset["Split"] == "Train"].index
     idx_val = dataset.loc[dataset["Split"] == "Validation"].index
     idx_test = dataset.loc[dataset["Split"] == "Test"].index
 
-    train_mask = sample_mask(idx_train, labels.shape[0])
-    val_mask = sample_mask(idx_val, labels.shape[0])
-    test_mask = sample_mask(idx_test, labels.shape[0])
+    train_mask = sample_mask(idx_train, targets.shape[0])
+    val_mask = sample_mask(idx_val, targets.shape[0])
+    test_mask = sample_mask(idx_test, targets.shape[0])
 
-    y_train = np.zeros_like(labels)
-    y_val = np.zeros_like(labels)
-    y_test = np.zeros_like(labels)
-    y_train[train_mask, :] = labels[train_mask, :]
-    y_val[val_mask, :] = labels[val_mask, :]
-    y_test[test_mask, :] = labels[test_mask, :]
+    y_train = np.zeros_like(targets)
+    y_val = np.zeros_like(targets)
+    y_test = np.zeros_like(targets)
+    y_train[train_mask, :] = targets[train_mask, :]
+    y_val[val_mask, :] = targets[val_mask, :]
+    y_test[test_mask, :] = targets[test_mask, :]
 
-    return (adj, features, y_train, y_val, y_test,
+    return (adj, features, labels, y_train, y_val, y_test,
             train_mask, val_mask, test_mask)
 
 

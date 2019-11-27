@@ -5,6 +5,7 @@ import mlflow
 import numpy as np
 import os
 import pandas as pd
+import sys
 import tensorflow as tf
 import yaml
 
@@ -106,6 +107,9 @@ def main(args):
     experiment_basename = os.path.basename(args.configuration).split(".yml")[0]
     experiment_date, experiment_hour, _ = experiment_basename.split("_")
 
+    if args.early_stopping > 0:
+        val_losses = []
+
     mlflow.set_experiment("{}_{}".format(experiment_date, experiment_hour))
     with mlflow.start_run():
         mlflow.log_param("experiment_basename", experiment_basename)
@@ -175,6 +179,14 @@ def main(args):
 
             mlflow.log_metrics(epoch_results, step=epoch)
 
+            if args.early_stopping > 0:
+                val_losses.append(validation_results[0].numpy())
+                if (len(val_losses) > args.early_stopping and
+                        val_losses[-1] > np.mean(val_losses[-(args.early_stopping+1):-1])):
+                    print("Early stopping...", file=sys.stderr)
+                    mlflow.log_param("early_stopping", True)
+                    break
+
         if args.run_test:
             test_step = evaluation_function()
             test_results = test_step(features, y_test, model, test_mask, loss, metrics)
@@ -214,6 +226,7 @@ if __name__ == "__main__":
                         help="Basename of the dataset files to generate the inputs.")
     parser.add_argument("configuration",
                         help="Path to the json with the configuration for the experiment.")
+    parser.add_argument("--early-stopping", default=0, type=int)
     parser.add_argument("--run-test", action="store_true")
 
     args = parser.parse_args()

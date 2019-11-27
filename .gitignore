@@ -116,7 +116,14 @@ experiments.sh
 exp.sh
 exps.sh
 mlruns/
+logs/
+*.out
+grid_search.yml
+random_search.yml
 
 # Project
 data/
 slurm.sh
+
+# vim
+.*.sw[op]

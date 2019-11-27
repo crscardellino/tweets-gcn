@@ -157,7 +157,7 @@ def main(args):
         train_step = train_function()
         validation_step = evaluation_function()
 
-        progress_bar = trange(config.get("epochs"))
+        progress_bar = trange(config.get("epochs", 100))
         for epoch in progress_bar:
             train_results = train_step(features, y_train, model, train_mask,
                                        loss, optimizer, metrics)
@@ -183,9 +183,11 @@ def main(args):
                 val_losses.append(validation_results[0].numpy())
                 if (len(val_losses) > args.early_stopping and
                         val_losses[-1] > np.mean(val_losses[-(args.early_stopping+1):-1])):
-                    print("Early stopping...", file=sys.stderr)
                     mlflow.log_param("early_stopping", True)
                     break
+
+        if epoch >= config.get("epochs", 100) - 1:
+            mlflow.log_param("early_stopping", False)
 
         if args.run_test:
             test_step = evaluation_function()

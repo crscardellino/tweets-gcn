@@ -60,15 +60,19 @@ def load_data(dataset_path, graph_path, features_path=None,
     labels = sorted(dataset["Stance"].unique())
     targets = pd.get_dummies(dataset["Stance"]).values.astype(dtype)
 
-    idx_train = dataset.loc[dataset["Split"] == "Train"].index
-    idx_val = dataset.loc[dataset["Split"] == "Validation"].index
-    idx_test = dataset.loc[dataset["Split"] == "Test"].index
+    y_shape = (features.shape[0], targets.shape[1])
+
+    idx_train = np.zeros(features.shape[0])
+    idx_train[dataset.loc[dataset["Split"] == "Train"].index] = 1
+    idx_val = np.zeros(features.shape[0])
+    idx_val[dataset.loc[dataset["Split"] == "Validation"].index] = 1
+    idx_test = np.zeros(features.shape[0])
+    idx_test[dataset.loc[dataset["Split"] == "Test"].index] = 1
 
     train_mask = sample_mask(idx_train, targets.shape[0])
     val_mask = sample_mask(idx_val, targets.shape[0])
     test_mask = sample_mask(idx_test, targets.shape[0])
 
-    y_shape = (features.shape[0], targets.shape[1])
 
     y_train = np.zeros(y_shape).astype(dtype)
     y_val = np.zeros(y_shape).astype(dtype)

@@ -41,13 +41,6 @@ def load_data(dataset_path, graph_path, features_path=None,
     dataset = pd.read_csv(dataset_path)
     graph_data = pd.read_csv(graph_path)
 
-    if features_path:
-        features = mmread(features_path)
-    else:
-        features = sps.eye(dataset.shape[0])
-
-    features = preprocess_features(features).tocsr().astype(dtype)
-
     tweet_graph = nx.Graph()
     tweet_graph.add_weighted_edges_from(graph_data.values.tolist())
 
@@ -56,6 +49,13 @@ def load_data(dataset_path, graph_path, features_path=None,
         weight="weight" if weighted_edges else None
     ).astype(dtype)
     adj.setdiag(0)
+
+    if features_path:
+        features = mmread(features_path)
+    else:
+        features = sps.eye(adj.shape[0])
+
+    features = preprocess_features(features).tocsr().astype(dtype)
 
     labels = sorted(dataset["Stance"].unique())
     targets = pd.get_dummies(dataset["Stance"]).values.astype(dtype)

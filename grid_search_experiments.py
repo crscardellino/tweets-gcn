@@ -45,7 +45,7 @@ if __name__ == "__main__":
     for i, parameters_values in enumerate(parameters_values):
         experiment_fname = os.path.join(
             args.output,
-            "grid-{}_{}.yml".format(experiment_base_name, i)
+            "grid_{}_{}.yml".format(experiment_base_name, i)
         )
 
         experiment_config = dict(zip(sorted_parameters, parameters_values))

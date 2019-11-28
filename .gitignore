@@ -107,14 +107,8 @@ venv.bak/
 .vscode/
 
 # Project's experiments
-experiment/
-experiments/
-exp/
-exps/
-experiment.sh
-experiments.sh
-exp.sh
-exps.sh
+exp*/
+exp*.sh
 mlruns/
 logs/
 *.out

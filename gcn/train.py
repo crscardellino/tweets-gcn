@@ -5,7 +5,6 @@ import mlflow
 import numpy as np
 import os
 import pandas as pd
-import sys
 import tensorflow as tf
 import yaml
 
@@ -105,12 +104,19 @@ def main(args):
     tf.random.set_seed(config.get("random_seed", 42))
 
     experiment_basename = os.path.basename(args.configuration).split(".yml")[0]
-    experiment_date, experiment_hour, _ = experiment_basename.split("_")
+    search_type, experiment_date, experiment_hour, _ = experiment_basename.split("_")
 
     if args.early_stopping > 0:
         val_losses = []
 
-    mlflow.set_experiment("{}_{}".format(experiment_date, experiment_hour))
+    mlflow.set_experiment(
+        "{}_{}_{}_{}".format(
+            args.input_basename.split("/")[-1],
+            search_type,
+            experiment_date,
+            experiment_hour
+        )
+    )
     with mlflow.start_run():
         mlflow.log_param("experiment_basename", experiment_basename)
         for param, value in config.items():

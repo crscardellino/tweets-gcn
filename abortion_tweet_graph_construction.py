@@ -2,17 +2,20 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import numpy as np
 import pandas as pd
 import string
 import sys
 import unidecode
 
+from collections import defaultdict
 from gensim import corpora, models
 from joblib import Parallel, delayed
 from nltk import ngrams
 from nltk.corpus import stopwords as nltk_stopwords
 from nltk.tokenize import TweetTokenizer
 from operator import itemgetter
+from scipy import sparse a sps
 
 
 def normalize_token(token, **kwargs):
@@ -200,6 +203,64 @@ def main(args):
         )
     )
 
+    if args.graph_document_word:
+        print("Building document_word_graph", file=sys.stderr)
+        tweet_corpus = dataset["NormalizedTweet"].apply(
+            tweets_vocab.doc2idx
+        ).tolist()
+
+        # Word-Word Co-occurrence Matrix
+        word_word_count = defaultdict(int)
+        for tweet in tweets_corpus:
+            for idx, ctoken in enumerate(tweet):
+                if ctoken == -1:
+                    continue
+                for wtoken in tweet[max(idx-window_size, 0):idx+window_size+1]:
+                    if wtoken == -1:
+                        continue
+                    word_word_count[(ctoken, wtoken)] += 1
+
+        data = list(word_word_count.values())
+        rows, cols = list(zip(*word_word_count.keys()))
+
+        cooccurrence_matrix_shape = (len(tweet_vocab),) * 2
+        cooccurence_matrix = sps.coo_matrix((data, (rows, cols)), shape=cooccurrence_matrix_shape)
+        cooccurence_matrix.setdiag(0)
+
+        # PPMI Matrix
+        word_totals = np.array(matrix.sum(axis=0))[0]
+        total = word_totals.sum()
+        word_probs = word_totals/total
+        ppmi = matrix / total
+        ppmi.data /= (word_probs[ppmi.row] * word_probs[ppmi.col])
+        ppmi.row = ppmi.row[ppmi.data > 0]
+        ppmi.col = ppmi.col[ppmi.data > 0]
+        ppmi.data = ppmi.data[ppmi.data > 0]
+        ppmi.data = np.log(ppmi.data)
+        ppmi = sps.triu(ppmi)
+
+        # Adjacency matrix
+        base_word_index = dataset.shape[0]
+        adjacency_shape = (base_word_index + len(tweet_vocab),) * 2
+
+        rows = []
+        cols = []
+        data = []
+
+        for tidx, tweet in enumerate(tfidf_corpus):
+            for widx, tfidf_score in tweet:
+                rows.append(tidx)
+                cols.append(widx + base_word_index)
+                data.append(tfidf_score)
+
+        rows.extend(ppmi.row + base_word_index)
+        cols.extend(ppmi.col + base_word_index)
+        data.extend(ppmi.data)
+
+        adjacency = sps.coo_matrix((data, (rows, cols)), shape=adjacency_shape)
+        adjacency.setdiag(1)
+        adjacencies["document_word"] = list(zip(adjacency.row, adjacency.col, adjacency.data))
+
     print("Saving graphs", file=sys.stderr)
     for graph_type, adjacency in adjacencies.items():
         pd.DataFrame(
@@ -217,6 +278,13 @@ if __name__ == "__main__":
                         help="Path to the dataset csv file.")
     parser.add_argument("output_basename",
                         help="Basename (path included) to store the outputs")
+    parser.add_argument("--graph-document-word",
+                        action="store_true",
+                        help="Build graph of document words (Yao et al 2019).")
+    parser.add_argument("--graph-document-word-window",
+                        default=5,
+                        help="Word co-occurrence window (Yao et al 2019).",
+                        type=int)
     parser.add_argument("--graph-hashtags",
                         action="store_true",
                         help="Build graph of hashtags.")

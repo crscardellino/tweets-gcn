@@ -55,6 +55,7 @@ def load_data(dataset_path, graph_path, features_path=None,
         tweet_graph,
         weight="weight" if weighted_edges else None
     ).astype(dtype)
+    adj.setdiag(0)
 
     labels = sorted(dataset["Stance"].unique())
     targets = pd.get_dummies(dataset["Stance"]).values.astype(dtype)
@@ -67,9 +68,11 @@ def load_data(dataset_path, graph_path, features_path=None,
     val_mask = sample_mask(idx_val, targets.shape[0])
     test_mask = sample_mask(idx_test, targets.shape[0])
 
-    y_train = np.zeros_like(targets)
-    y_val = np.zeros_like(targets)
-    y_test = np.zeros_like(targets)
+    y_shape = (features.shape[0], targets.shape[1])
+
+    y_train = np.zeros(y_shape).astype(dtype)
+    y_val = np.zeros(y_shape).astype(dtype)
+    y_test = np.zeros(y_shape).astype(dtype)
     y_train[train_mask, :] = targets[train_mask, :]
     y_val[val_mask, :] = targets[val_mask, :]
     y_test[test_mask, :] = targets[test_mask, :]

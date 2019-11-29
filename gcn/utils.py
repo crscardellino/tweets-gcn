@@ -7,7 +7,6 @@ import networkx as nx
 from scipy import sparse as sps
 from scipy.io import mmread
 
-
 def sample_mask(idx, l):
     """Create mask."""
     mask = np.zeros(l)
@@ -41,13 +40,6 @@ def load_data(dataset_path, graph_path, features_path=None,
     dataset = pd.read_csv(dataset_path)
     graph_data = pd.read_csv(graph_path)
 
-    if features_path:
-        features = mmread(features_path)
-    else:
-        features = sps.eye(dataset.shape[0])
-
-    features = preprocess_features(features).tocsr().astype(dtype)
-
     tweet_graph = nx.Graph()
     tweet_graph.add_weighted_edges_from(graph_data.values.tolist())
 
@@ -57,25 +49,33 @@ def load_data(dataset_path, graph_path, features_path=None,
     ).astype(dtype)
     adj.setdiag(0)
 
+    if features_path:
+        features = mmread(features_path)
+    else:
+        features = sps.eye(adj.shape[0])
+
+    features = preprocess_features(features).tocsr().astype(dtype)
+
     labels = sorted(dataset["Stance"].unique())
     targets = pd.get_dummies(dataset["Stance"]).values.astype(dtype)
 
-    idx_train = dataset.loc[dataset["Split"] == "Train"].index
-    idx_val = dataset.loc[dataset["Split"] == "Validation"].index
-    idx_test = dataset.loc[dataset["Split"] == "Test"].index
-
-    train_mask = sample_mask(idx_train, targets.shape[0])
-    val_mask = sample_mask(idx_val, targets.shape[0])
-    test_mask = sample_mask(idx_test, targets.shape[0])
-
     y_shape = (features.shape[0], targets.shape[1])
+
+    train_indices = dataset.loc[dataset["Split"] == "Train"].index
+    val_indices = dataset.loc[dataset["Split"] == "Validation"].index
+    test_indices = dataset.loc[dataset["Split"] == "Test"].index
+
+    train_mask = sample_mask(train_indices, features.shape[0])
+    val_mask = sample_mask(val_indices, features.shape[0])
+    test_mask = sample_mask(test_indices, features.shape[0])
 
     y_train = np.zeros(y_shape).astype(dtype)
     y_val = np.zeros(y_shape).astype(dtype)
     y_test = np.zeros(y_shape).astype(dtype)
-    y_train[train_mask, :] = targets[train_mask, :]
-    y_val[val_mask, :] = targets[val_mask, :]
-    y_test[test_mask, :] = targets[test_mask, :]
+
+    y_train[train_mask, :] = targets[train_indices, :]
+    y_val[val_mask, :] = targets[val_indices, :]
+    y_test[test_mask, :] = targets[test_indices, :] 
 
     return (adj, features, labels, y_train, y_val, y_test,
             train_mask, val_mask, test_mask)

@@ -15,7 +15,7 @@ from nltk import ngrams
 from nltk.corpus import stopwords as nltk_stopwords
 from nltk.tokenize import TweetTokenizer
 from operator import itemgetter
-from scipy import sparse a sps
+from scipy import sparse as sps
 
 
 def normalize_token(token, **kwargs):
@@ -205,12 +205,13 @@ def main(args):
 
     if args.graph_document_word:
         print("Building document_word_graph", file=sys.stderr)
-        tweet_corpus = dataset["NormalizedTweet"].apply(
+        tweets_corpus = dataset["NormalizedTweet"].apply(
             tweets_vocab.doc2idx
         ).tolist()
 
         # Word-Word Co-occurrence Matrix
         word_word_count = defaultdict(int)
+        window_size = args.graph_document_word_window
         for tweet in tweets_corpus:
             for idx, ctoken in enumerate(tweet):
                 if ctoken == -1:
@@ -223,15 +224,18 @@ def main(args):
         data = list(word_word_count.values())
         rows, cols = list(zip(*word_word_count.keys()))
 
-        cooccurrence_matrix_shape = (len(tweet_vocab),) * 2
-        cooccurence_matrix = sps.coo_matrix((data, (rows, cols)), shape=cooccurrence_matrix_shape)
-        cooccurence_matrix.setdiag(0)
+        cooccurrence_matrix_shape = (len(tweets_vocab),) * 2
+        cooccurrence_matrix = sps.coo_matrix(
+            (data, (rows, cols)),
+            shape=cooccurrence_matrix_shape
+        )
+        cooccurrence_matrix.setdiag(0)
 
         # PPMI Matrix
-        word_totals = np.array(matrix.sum(axis=0))[0]
+        word_totals = np.array(cooccurrence_matrix.sum(axis=0))[0]
         total = word_totals.sum()
         word_probs = word_totals/total
-        ppmi = matrix / total
+        ppmi = cooccurrence_matrix / total
         ppmi.data /= (word_probs[ppmi.row] * word_probs[ppmi.col])
         ppmi.row = ppmi.row[ppmi.data > 0]
         ppmi.col = ppmi.col[ppmi.data > 0]
@@ -241,7 +245,7 @@ def main(args):
 
         # Adjacency matrix
         base_word_index = dataset.shape[0]
-        adjacency_shape = (base_word_index + len(tweet_vocab),) * 2
+        adjacency_shape = (base_word_index + len(tweets_vocab),) * 2
 
         rows = []
         cols = []

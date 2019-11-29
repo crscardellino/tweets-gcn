@@ -7,7 +7,6 @@ import networkx as nx
 from scipy import sparse as sps
 from scipy.io import mmread
 
-
 def sample_mask(idx, l):
     """Create mask."""
     mask = np.zeros(l)
@@ -62,24 +61,21 @@ def load_data(dataset_path, graph_path, features_path=None,
 
     y_shape = (features.shape[0], targets.shape[1])
 
-    idx_train = np.zeros(features.shape[0])
-    idx_train[dataset.loc[dataset["Split"] == "Train"].index] = 1
-    idx_val = np.zeros(features.shape[0])
-    idx_val[dataset.loc[dataset["Split"] == "Validation"].index] = 1
-    idx_test = np.zeros(features.shape[0])
-    idx_test[dataset.loc[dataset["Split"] == "Test"].index] = 1
+    train_indices = dataset.loc[dataset["Split"] == "Train"].index
+    val_indices = dataset.loc[dataset["Split"] == "Validation"].index
+    test_indices = dataset.loc[dataset["Split"] == "Test"].index
 
-    train_mask = sample_mask(idx_train, targets.shape[0])
-    val_mask = sample_mask(idx_val, targets.shape[0])
-    test_mask = sample_mask(idx_test, targets.shape[0])
-
+    train_mask = sample_mask(train_indices, features.shape[0])
+    val_mask = sample_mask(val_indices, features.shape[0])
+    test_mask = sample_mask(test_indices, features.shape[0])
 
     y_train = np.zeros(y_shape).astype(dtype)
     y_val = np.zeros(y_shape).astype(dtype)
     y_test = np.zeros(y_shape).astype(dtype)
-    y_train[train_mask, :] = targets[train_mask, :]
-    y_val[val_mask, :] = targets[val_mask, :]
-    y_test[test_mask, :] = targets[test_mask, :]
+
+    y_train[train_mask, :] = targets[train_indices, :]
+    y_val[val_mask, :] = targets[val_indices, :]
+    y_test[test_mask, :] = targets[test_indices, :] 
 
     return (adj, features, labels, y_train, y_val, y_test,
             train_mask, val_mask, test_mask)

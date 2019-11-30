@@ -7,6 +7,7 @@ import networkx as nx
 from scipy import sparse as sps
 from scipy.io import mmread
 
+
 def sample_mask(idx, l):
     """Create mask."""
     mask = np.zeros(l)
@@ -14,7 +15,7 @@ def sample_mask(idx, l):
     return np.array(mask, dtype=np.bool)
 
 
-def load_data(dataset_path, graph_path, features_path=None,
+def load_data(dataset_path, graph_paths, features_path=None,
               weighted_edges=False, dtype=np.float32):
     """
     Load dataset and graph.
@@ -25,8 +26,8 @@ def load_data(dataset_path, graph_path, features_path=None,
         Path to the csv file containing the data. It should have at least two
         columns: "Stance" which will be the target column, and "Split" that
         tells which row belongs to which dataset (train/test/validation/unlabel).
-    graph_path : str
-        Path to a csv file containing the adjacency matrix (only half of it,
+    graph_paths : list of str
+        List of paths to csv files containing the adjacency matrices (only half of it,
         since it is symmetric) in coordinate format for the graph of the tweets.
     features_path : str
         If given, path to the feature representation of the nodes as a sparse
@@ -38,21 +39,25 @@ def load_data(dataset_path, graph_path, features_path=None,
     """
 
     dataset = pd.read_csv(dataset_path)
-    graph_data = pd.read_csv(graph_path)
+    adjacencies = []
 
-    tweet_graph = nx.Graph()
-    tweet_graph.add_weighted_edges_from(graph_data.values.tolist())
+    for graph_path in graph_paths:
+        graph_data = pd.read_csv(graph_path)
 
-    adj = nx.adjacency_matrix(
-        tweet_graph,
-        weight="weight" if weighted_edges else None
-    ).astype(dtype)
-    adj.setdiag(0)
+        tweet_graph = nx.Graph()
+        tweet_graph.add_weighted_edges_from(graph_data.values.tolist())
+
+        adj = nx.adjacency_matrix(
+            tweet_graph,
+            weight="weight" if weighted_edges else None
+        ).astype(dtype)
+        adj.setdiag(0)
+        adjacencies.append(adj)
 
     if features_path:
         features = mmread(features_path)
     else:
-        features = sps.eye(adj.shape[0])
+        features = sps.eye(adjacencies[0].shape[0])
 
     features = preprocess_features(features).tocsr().astype(dtype)
 
@@ -75,9 +80,9 @@ def load_data(dataset_path, graph_path, features_path=None,
 
     y_train[train_mask, :] = targets[train_indices, :]
     y_val[val_mask, :] = targets[val_indices, :]
-    y_test[test_mask, :] = targets[test_indices, :] 
+    y_test[test_mask, :] = targets[test_indices, :]
 
-    return (adj, features, labels, y_train, y_val, y_test,
+    return (adjacencies, features, labels, y_train, y_val, y_test,
             train_mask, val_mask, test_mask)
 
 

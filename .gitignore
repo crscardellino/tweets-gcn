@@ -112,8 +112,8 @@ exp*.sh
 mlruns/
 logs/
 *.out
-grid_search.yml
-random_search.yml
+grid_search*.yml
+random_search*.yml
 result*/
 
 # Project

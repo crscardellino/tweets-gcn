@@ -14,7 +14,7 @@ def main(args):
             n=int(args.sample_size),
             random_state=args.random_seed
         ).reset_index(drop=True)
-    else:
+    elif args.sample_size < 1:
         udata = udata.sample(
             frac=args.sample_size,
             random_state=args.random_seed

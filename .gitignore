@@ -114,6 +114,7 @@ logs/
 *.out
 grid_search.yml
 random_search.yml
+result*/
 
 # Project
 data/

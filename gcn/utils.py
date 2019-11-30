@@ -75,7 +75,7 @@ def load_data(dataset_path, graph_path, features_path=None,
 
     y_train[train_mask, :] = targets[train_indices, :]
     y_val[val_mask, :] = targets[val_indices, :]
-    y_test[test_mask, :] = targets[test_indices, :] 
+    y_test[test_mask, :] = targets[test_indices, :]
 
     return (adj, features, labels, y_train, y_val, y_test,
             train_mask, val_mask, test_mask)
@@ -84,7 +84,8 @@ def load_data(dataset_path, graph_path, features_path=None,
 def preprocess_features(features):
     """Row-normalize feature matrix"""
     rowsum = np.array(features.sum(1))
-    r_inv = np.power(rowsum, -1).flatten()
+    with np.errstate(divide="ignore"):
+        r_inv = np.power(rowsum, -1).flatten()
     r_inv[np.isinf(r_inv)] = 0.
     r_mat_inv = sps.diags(r_inv)
     return r_mat_inv.dot(features)

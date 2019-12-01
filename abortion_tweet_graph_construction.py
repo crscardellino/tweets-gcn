@@ -144,6 +144,7 @@ def main(args):
             remove_numeric=args.remove_numeric,
             normalize_hashtags=args.normalize_hashtags,
             normalize_mentions=args.normalize_mentions,
+            split_hashtags=args.split_hashtags,
             tweet_lowercase=args.tweet_lowercase
         )
     )

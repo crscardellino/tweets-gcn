@@ -60,7 +60,7 @@ def normalize_tweet(tweet, stopwords=set(), punctuation=set(), **kwargs):
              if t not in stopwords and t not in punctuation]
 
     if kwargs.get("split_hashtags"):
-        tweet = list(chain(**map(split_hashtags, tweet)))
+        tweet = list(chain(*map(split_hashtags, tweet)))
 
     return [t for t in tweet if t != ""]
 

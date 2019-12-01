@@ -4,12 +4,14 @@
 import argparse
 import numpy as np
 import pandas as pd
+import re
 import string
 import sys
 import unidecode
 
 from collections import defaultdict
 from gensim import corpora, models
+from itertools import chain
 from joblib import Parallel, delayed
 from nltk import ngrams
 from nltk.corpus import stopwords as nltk_stopwords
@@ -31,12 +33,14 @@ def normalize_token(token, **kwargs):
     if kwargs.get("remove_numeric") and token.isnumeric():
         return ""
 
-    if kwargs.get("normalize_hashtags") and token.startswith("#"):
-        # TODO: Maybe a way to split hashtags?
-        token = token[1:]
+    if kwargs.get("split_hashtags") and token.startswith("#"):
+        matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', token[1:])
+        token = "#" + ":".join([m.group(0) for m in matches])
+    elif kwargs.get("normalize_hashtags") and token.startswith("#"):
+        token = "<hashtag>"
 
     if kwargs.get("normalize_mentions") and token.startswith("@"):
-        token = token[1:]
+        token = "<user>"
 
     if kwargs.get("tweet_lowercase"):
         token = token.lower()
@@ -44,9 +48,19 @@ def normalize_token(token, **kwargs):
     return unidecode.unidecode(token)
 
 
+def split_hashtags(token):
+    if token.startswith("#"):
+        return token[1:].split(":")
+    else:
+        return [token]
+
+
 def normalize_tweet(tweet, stopwords=set(), punctuation=set(), **kwargs):
     tweet = [normalize_token(t, **kwargs).strip() for t in tweet
              if t not in stopwords and t not in punctuation]
+
+    if kwargs.get("split_hashtags"):
+        tweet = list(chain(**map(split_hashtags, tweet)))
 
     return [t for t in tweet if t != ""]
 

@@ -364,6 +364,9 @@ if __name__ == "__main__":
     parser.add_argument("--reduce-tweet-word-len",
                         action="store_true",
                         help="Reduce the lenght of words in TweetTokenizer.")
+    parser.add_argument("--split-hashtags",
+                        action="store_true",
+                        help="Camel case splitting of hashtags.")
     parser.add_argument("--supervised-only",
                         action="store_true",
                         help="Build data only from labeled corpora.")

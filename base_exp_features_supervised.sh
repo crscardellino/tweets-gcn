@@ -4,7 +4,7 @@ set -e
 
 (for c in corrected original
 do
-    BASE_NAME="semeval.abortion.data.${c}.supervised"
+    BASE_NAME="semeval.abortion.${c}.supervised"
     python data_processing.py \
         --char-ngrams 2 3 4 \
         --graph-hashtags \

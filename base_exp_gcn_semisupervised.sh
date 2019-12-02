@@ -8,7 +8,7 @@ find ./experiments/best_params -type f -name "*.yml" | while read fname
 do
     for c in corrected original
     do
-        BASE_NAME="semeval.abortion.data.${c}.semisupervised"
+        BASE_NAME="semeval.abortion.${c}.semisupervised"
         python -m gcn.train \
             ./data/$BASE_NAME/$BASE_NAME.0 \
             $fname # --run-test

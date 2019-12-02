@@ -56,12 +56,13 @@ def evaluation_function():
 def build_model(input_dim,
                 output_dim,
                 filter_sizes,
-                adjacency_matrix,
+                adjacency_matrices,
                 sparse_input,
                 sparse_nnz_values,
                 dropout,
                 activation,
                 use_bias,
+                use_gate,
                 reg_parameter):
     model_input = tf.keras.Input(
         shape=(input_dim,),
@@ -84,10 +85,11 @@ def build_model(input_dim,
 
         layer = GraphConvolution(
             units=fsize,
-            support=adjacency_matrix,
+            supports=adjacency_matrices,
             input_shape=(input_dim,) if sparse_input and lidx == 0 else None,
             activation=activation if lidx <= len(filter_sizes) else None,
             use_bias=use_bias,
+            use_gate=use_gate,
             kernel_regularizer=tf.keras.regularizers.l2(reg_parameter)
         )(layer)
 
@@ -125,10 +127,14 @@ def main(args):
         dataset_path = "{}.csv.gz".format(
             args.input_basename
         )
-        graph_path = "{}.{}.csv.gz".format(
-            args.input_basename,
-            config.get("edge_type", "hashtags")
-        )
+
+        graph_paths = []
+        for edge_type in config.get("edge_types", ["5-gram"]):
+            graph_paths.append("{}.{}.csv.gz".format(
+                args.input_basename,
+                edge_type
+            ))
+
         if config.get("feature_type"):
             features_path = "{}.{}.mm".format(
                 args.input_basename,
@@ -137,9 +143,9 @@ def main(args):
         else:
             features_path = None
 
-        adj, features, labels, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(
+        adjs, features, labels, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(
             dataset_path=dataset_path,
-            graph_path=graph_path,
+            graph_paths=graph_paths,
             features_path=features_path,
             weighted_edges=config.get("weighted_edges", False)
         )
@@ -148,12 +154,13 @@ def main(args):
             input_dim=features.shape[1],
             output_dim=y_train.shape[1],
             filter_sizes=config.get("filter_sizes", [16]),
-            adjacency_matrix=preprocess_adj(adj),
+            adjacency_matrices=[preprocess_adj(adj) for adj in adjs],
             sparse_input=True,
             sparse_nnz_values=features.nnz,
             dropout=config.get("dropout", 0),
             activation=config.get("activation", "relu"),
             use_bias=config.get("use_bias", False),
+            use_gate=config.get("use_gate", False),
             reg_parameter=config.get("reg_parameter", 0)
         )
 

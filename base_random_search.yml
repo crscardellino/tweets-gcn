@@ -5,13 +5,12 @@ dropout:
 - 0.3
 - 0.4
 - 0.5
-edge_type:
-- hashtags
-- mentions
-- 3-gram
-- 4-gram
-- 5-gram
-- 6-gram
+edge_types:
+- - hashtags
+- - hashtags
+  - 5-gram
+- - mentions
+  - 5-gram
 epochs:
 - 100
 - 200
@@ -40,6 +39,9 @@ reg_parameter:
 - 0.0001
 - 0
 use_bias:
+- true
+- false
+use_gate:
 - true
 - false
 weighted_edges:

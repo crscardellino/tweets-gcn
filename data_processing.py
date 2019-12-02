@@ -4,12 +4,14 @@
 import argparse
 import numpy as np
 import pandas as pd
+import re
 import string
 import sys
 import unidecode
 
 from collections import defaultdict
 from gensim import corpora, models
+from itertools import chain
 from joblib import Parallel, delayed
 from nltk import ngrams
 from nltk.corpus import stopwords as nltk_stopwords
@@ -31,12 +33,14 @@ def normalize_token(token, **kwargs):
     if kwargs.get("remove_numeric") and token.isnumeric():
         return ""
 
-    if kwargs.get("normalize_hashtags") and token.startswith("#"):
-        # TODO: Maybe a way to split hashtags?
-        token = token[1:]
+    if kwargs.get("split_hashtags") and token.startswith("#"):
+        matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', token[1:])
+        token = "#" + ":".join([m.group(0) for m in matches])
+    elif kwargs.get("normalize_hashtags") and token.startswith("#"):
+        token = "<hashtag>"
 
     if kwargs.get("normalize_mentions") and token.startswith("@"):
-        token = token[1:]
+        token = "<user>"
 
     if kwargs.get("tweet_lowercase"):
         token = token.lower()
@@ -44,11 +48,38 @@ def normalize_token(token, **kwargs):
     return unidecode.unidecode(token)
 
 
+def split_hashtags(token):
+    if token.startswith("#"):
+        return token[1:].split(":")
+    else:
+        return [token]
+
+
 def normalize_tweet(tweet, stopwords=set(), punctuation=set(), **kwargs):
     tweet = [normalize_token(t, **kwargs).strip() for t in tweet
-             if t not in stopwords and t not in punctuation]
+             if t not in stopwords and t not in punctuation and t.strip() != ""]
 
-    return [t for t in tweet if t != ""]
+    if kwargs.get("split_hashtags"):
+        tweet = list(chain(*map(split_hashtags, tweet)))
+
+    if kwargs.get("words_ngrams", None):
+        word_ngrams = (
+            "_".join(ngram)
+            for n in kwargs["word_ngrams"]
+            for ngram in ngrams(tweet, n)
+        )
+        tweet = list(chain(tweet, word_ngrams))
+
+    if kwargs.get("char_ngrams", None):
+        char_ngrams = (
+            "".join(cngram)
+            for token in tweet
+            for n in kwargs["char_ngrams"]
+            for cngram in ngrams(token, n)
+        )
+        tweet = list(chain(tweet, char_ngrams))
+
+    return tweet
 
 
 def extract_hashtags(tokens, hashtag_ignore=set()):
@@ -124,13 +155,16 @@ def main(args):
             tweet=t,
             stopwords=stopwords,
             punctuation=punctuation_symbols,
+            char_ngrams=args.char_ngrams,
+            normalize_hashtags=args.normalize_hashtags,
+            normalize_mentions=args.normalize_mentions,
             remove_hashtags=args.remove_hashtags,
             remove_links=args.remove_links,
             remove_mentions=args.remove_mentions,
             remove_numeric=args.remove_numeric,
-            normalize_hashtags=args.normalize_hashtags,
-            normalize_mentions=args.normalize_mentions,
-            tweet_lowercase=args.tweet_lowercase
+            split_hashtags=args.split_hashtags,
+            tweet_lowercase=args.tweet_lowercase,
+            word_ngrams=args.word_ngrams
         )
     )
 
@@ -282,6 +316,11 @@ if __name__ == "__main__":
                         help="Path to the dataset csv file.")
     parser.add_argument("output_basename",
                         help="Basename (path included) to store the outputs")
+    parser.add_argument("--char-ngrams",
+                        default=[],
+                        help="Build features of character n-grams.",
+                        nargs="+",
+                        type=int)
     parser.add_argument("--graph-document-word",
                         action="store_true",
                         help="Build graph of document words (Yao et al 2019).")
@@ -350,12 +389,20 @@ if __name__ == "__main__":
     parser.add_argument("--reduce-tweet-word-len",
                         action="store_true",
                         help="Reduce the lenght of words in TweetTokenizer.")
+    parser.add_argument("--split-hashtags",
+                        action="store_true",
+                        help="Camel case splitting of hashtags.")
     parser.add_argument("--supervised-only",
                         action="store_true",
                         help="Build data only from labeled corpora.")
     parser.add_argument("--tweet-lowercase",
                         action="store_true",
                         help="Lowercase the tweets.")
+    parser.add_argument("--word-ngrams",
+                        default=[],
+                        help="Build features of word n-grams.",
+                        nargs="+",
+                        type=int)
 
     args = parser.parse_args()
 

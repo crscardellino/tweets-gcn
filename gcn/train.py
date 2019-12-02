@@ -62,6 +62,7 @@ def build_model(input_dim,
                 dropout,
                 activation,
                 use_bias,
+                use_gate,
                 reg_parameter):
     model_input = tf.keras.Input(
         shape=(input_dim,),
@@ -88,6 +89,7 @@ def build_model(input_dim,
             input_shape=(input_dim,) if sparse_input and lidx == 0 else None,
             activation=activation if lidx <= len(filter_sizes) else None,
             use_bias=use_bias,
+            use_gate=use_gate,
             kernel_regularizer=tf.keras.regularizers.l2(reg_parameter)
         )(layer)
 
@@ -158,6 +160,7 @@ def main(args):
             dropout=config.get("dropout", 0),
             activation=config.get("activation", "relu"),
             use_bias=config.get("use_bias", False),
+            use_gate=config.get("use_gate", False),
             reg_parameter=config.get("reg_parameter", 0)
         )
 

@@ -15,6 +15,7 @@ class GraphConvolution(layers.Layer):
                  input_shape=None,
                  activation=None,
                  use_bias=False,
+                 use_gate=False,
                  kernel_initializer="glorot_uniform",
                  bias_initializer="zeros",
                  kernel_regularizer=None,
@@ -32,6 +33,7 @@ class GraphConvolution(layers.Layer):
 
         self.activation = tf.keras.activations.get(activation)
         self.use_bias = use_bias
+        self.use_gate = use_gate
         self.kernel_initializer = tf.keras.initializers.get(kernel_initializer)
         self.bias_initializer = tf.keras.initializers.get(bias_initializer)
         self.kernel_regularizer = tf.keras.regularizers.get(kernel_regularizer)
@@ -47,8 +49,9 @@ class GraphConvolution(layers.Layer):
         if self.use_bias:
             self.b = []
 
-        self.W_gate = []
-        self.b_gate = []
+        if self.use_gate:
+            self.W_gate = []
+            self.b_gate = []
 
         _input_shape = self._input_shape[-1] if self.has_sparse_input else input_shape[-1]
 
@@ -75,22 +78,24 @@ class GraphConvolution(layers.Layer):
                                               constraint=self.bias_constraint,
                                               trainable=True))
 
-            self.W_gate.append(self.add_weight(shape=(_input_shape, 1),
-                                               initializer="glorot_uniform",
-                                               name="W_gate_{}".format(i),
-                                               trainable=True))
+            if self.use_gate:
+                self.W_gate.append(self.add_weight(shape=(_input_shape, 1),
+                                                   initializer="glorot_uniform",
+                                                   name="W_gate_{}".format(i),
+                                                   trainable=True))
 
-            self.b_gate.append(self.add_weight(shape=(1,),
-                                               initializer="glorot_uniform",
-                                               name="b_gate",
-                                               trainable=True))
+                self.b_gate.append(self.add_weight(shape=(1,),
+                                                   initializer="glorot_uniform",
+                                                   name="b_gate",
+                                                   trainable=True))
 
     def call(self, inputs):
         output = []
         for i in range(len(self.supports)):
             if isinstance(inputs, tf.SparseTensor):
                 pre_sup = tf.sparse.sparse_dense_matmul(inputs, self.W[i])
-                pre_g = tf.sparse.sparse_dense_matmul(inputs, self.W_gate[i])
+                if self.use_gate:
+                    pre_g = tf.sparse.sparse_dense_matmul(inputs, self.W_gate[i])
             elif sps.issparse(inputs):
                 indices, values, shape = sparse_to_tuple(inputs)
                 X = tf.SparseTensor(
@@ -99,19 +104,24 @@ class GraphConvolution(layers.Layer):
                     dense_shape=shape
                 )
                 pre_sup = tf.sparse.sparse_dense_matmul(X, self.W[i])
-                pre_g = tf.sparse.sparse_dense_matmul(X, self.W_gate[i])
+                if self.use_gate:
+                    pre_g = tf.sparse.sparse_dense_matmul(X, self.W_gate[i])
             else:
                 pre_sup = tf.matmul(inputs, self.W[i])
-                pre_g = tf.matmul(inputs, self.W_gate[i])
+                if self.use_gate:
+                    pre_g = tf.matmul(inputs, self.W_gate[i])
 
             if self.use_bias:
                 pre_sup += self.b[i]
 
-            g = tf.nn.sigmoid(pre_g + self.b_gate[i])
+            if self.use_gate:
+                g = tf.nn.sigmoid(pre_g + self.b_gate[i])
 
-            # This obligues the batch size to be equal to the number of
-            # nodes in the adjacency matrix
-            output.append(tf.sparse.sparse_dense_matmul(self.A[i], g * pre_sup))
+                # This obligues the batch size to be equal to the number of
+                # nodes in the adjacency matrix
+                output.append(tf.sparse.sparse_dense_matmul(self.A[i], g * pre_sup))
+            else:
+                output.append(tf.sparse.sparse_dense_matmul(self.A[i], pre_sup))
 
         return self.activation(tf.math.add_n(output))
 

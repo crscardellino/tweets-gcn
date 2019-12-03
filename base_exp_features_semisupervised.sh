@@ -20,7 +20,7 @@ do
             --reduce-tweet-word-len \
             --tweet-lowercase \
             ./data/$BASE_NAME/$BASE_NAME.${i}.csv.gz \
-            ./data/$BASE_NAME/$BASE_NAME &
+            ./data/$BASE_NAME/$BASE_NAME.${i} &
     done
 done
 wait)

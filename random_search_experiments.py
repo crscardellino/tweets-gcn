@@ -33,7 +33,7 @@ if __name__ == "__main__":
     for i in range(args.experiments):
         experiment_fname = os.path.join(
             args.output,
-            "random_{}_{}.yml".format(experiment_base_name, i)
+            "random_{}_{:03d}.yml".format(experiment_base_name, i)
         )
 
         experiment_config = {}

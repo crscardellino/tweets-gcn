@@ -118,7 +118,7 @@ result*/
 
 # Project
 data/
-slurm.sh
+
 
 # vim
 .*.sw[op]

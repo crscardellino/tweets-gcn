@@ -8,6 +8,7 @@ import re
 import string
 import sys
 import unidecode
+import yaml
 
 from collections import defaultdict
 from gensim import corpora, models
@@ -132,6 +133,25 @@ def build_adjacency_matrix(graph_type, data):
 def main(args):
     print("Loading data", file=sys.stderr)
     dataset = pd.read_csv(args.dataset_input)
+    data_config = dict(
+        char_ngrams=args.char_ngrams,
+        ignore_hashtags=args.ignore_hashtags,
+        ignore_mentions=args.ignore_mentions,
+        min_docs=args.min_docs,
+        max_docs=args.max_docs,
+        normalize_hashtags=args.normalize_hashtags,
+        normalize_mentions=args.normalize_mentions,
+        reduce_tweet_word_len=args.reduce_tweet_word_len,
+        remove_hashtags=args.remove_hashtags,
+        remove_links=args.remove_links,
+        remove_mentions=args.remove_mentions,
+        remove_numeric=args.remove_numeric,
+        remove_punctuation=args.remove_punctuation,
+        remove_stopwords=args.remove_stopwords,
+        split_hashtags=args.split_hashtags,
+        tweet_lowercase=args.tweet_lowercase,
+        word_ngrams=args.word_ngrams
+    )
 
     if args.supervised_only:
         print("Filtering unsupervised", file=sys.stderr)
@@ -308,6 +328,10 @@ def main(args):
             "{}.{}.csv.gz".format(args.output_basename, graph_type),
             index=False
         )
+
+    print("Saving data configuration", file=sys.stderr)
+    with open("{}.data.yml".format(args.output_basename), "w") as fh:
+        yaml.dump(data_config, fh)
 
 
 if __name__ == "__main__":

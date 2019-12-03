@@ -119,10 +119,18 @@ def main(args):
             experiment_hour
         )
     )
+
     with mlflow.start_run():
+        mlflow.log_artifact(args.configuration)
         mlflow.log_param("experiment_basename", experiment_basename)
         for param, value in config.items():
-            mlflow.log_param(param, value)
+            mlflow.log_param("experiment_{}".format(param), value)
+
+        mlflow.log_artifact("{}.data.yml".format(args.input_name))
+        with open("{}.data.yml".format(args.input_name)) as fh:
+            data_config = yaml.load(fh, Loader=yaml.SafeLoader)
+            for param, value in data_config.items():
+                mlflow.log_param("data_{}".format(param), value)
 
         dataset_path = "{}.csv.gz".format(
             args.input_basename

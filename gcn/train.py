@@ -126,8 +126,8 @@ def main(args):
         for param, value in config.items():
             mlflow.log_param("experiment_{}".format(param), value)
 
-        mlflow.log_artifact("{}.data.yml".format(args.input_name))
-        with open("{}.data.yml".format(args.input_name)) as fh:
+        mlflow.log_artifact("{}.data.yml".format(args.input_basename))
+        with open("{}.data.yml".format(args.input_basename)) as fh:
             data_config = yaml.load(fh, Loader=yaml.SafeLoader)
             for param, value in data_config.items():
                 mlflow.log_param("data_{}".format(param), value)

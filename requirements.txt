@@ -1,5 +1,5 @@
 gensim==3.8.0
-mlflow==1.4.0
+mlflow==1.23.1
 networkx==2.2
 nltk==3.4
 numpy==1.16.2
